@@ -40,44 +40,62 @@ class WC_Autoship_Table_Rate_Shipping extends WC_Shipping_Method {
 	public function calculate_shipping( $package ) {
 		global $wpdb;
 		
-		$table_rates_result = $wpdb->get_results(
-			"SELECT rate_id, rate_class, rate_min, rate_max, rate_cost, shipping_method_id
-			FROM {$wpdb->prefix}woocommerce_shipping_table_rates
-			WHERE rate_condition = 'price'"
+		$shipping_methods_results = $wpdb->get_results(
+			"SELECT shipping_method_id
+			FROM {$wpdb->prefix}woocommerce_shipping_zone_shipping_methods
+			WHERE shipping_method_type = 'table_rate'"
 		);
 		
-		foreach ( $package['contents'] as $item ) {
-			// Get WooCommerce product
-			$product = $item['data'];
-			if ( empty( $product ) ) {
-				continue;
+		foreach ( $shipping_methods_results as $shipping_method ) {
+		
+			$table_rate_settings = get_option( 'woocommerce_table_rate-' . $shipping_method->shipping_method_id . '_settings' );
+			
+			$table_rates_result = $wpdb->get_results( $wpdb->prepare(
+				"SELECT rate_id, rate_class, rate_min, rate_max, rate_cost, shipping_method_id
+				FROM {$wpdb->prefix}woocommerce_shipping_table_rates
+				WHERE shipping_method_id = %d AND rate_condition = 'price'",
+				$shipping_method->shipping_method_id
+			) );
+			
+			// Get shipping classes
+			$rate_shipping_classes = array();
+			foreach  ( $table_rates_result as $table_rate ) {
+				$rate_shipping_classes[ $table_rate->rate_class ] = true;
 			}
 			
-			// Get product price
-			$product_price = $product->get_price();
-			// Calculate line price
-			$line_price = $product_price * $item['quantity'];
-			
-			// Loop through table rates
-			foreach  ( $table_rates_result as $table_rate ) {
+			// Calculate cart total
+			$cart_total = 0.0;
+			foreach ( $package['contents'] as $item ) {
+				// Get WooCommerce product
+				$product = $item['data'];
+				if ( empty( $product ) ) {
+					continue;
+				}
 				$shipping_classes = get_the_terms( $product->id, 'product_shipping_class' );
-				if ( $shipping_classes && ! is_wp_error( $shipping_classes ) && isset( $shipping_classes[0] ) ) {
-					// Check shipping class
-					if ( $table_rate->rate_class == $shipping_classes[0]->term_id ) {
-						// Check price
-						if ( $table_rate->rate_min <= $line_price && $table_rate->rate_max >= $line_price ) {
-							$rate = array(
-								'id' => $this->id . ':' . $table_rate->rate_id,
-								'label' => "Autoship Table Rate",
-								'cost' => $table_rate->rate_cost,
-								'calc_tax' => 'per_item'
-							);
-							$this->add_rate( $rate );
-						}
-					}
+				if ( $shipping_classes && ! is_wp_error( $shipping_classes ) && isset( $shipping_classes[0] ) && key_exists( $shipping_classes[0]->term_id, $rate_shipping_classes ) ) {
+					$cart_total += $item['line_total'];
 				}
 			}
+
+			// Loop through table rates
+			foreach  ( $table_rates_result as $table_rate ) {
+				// Check price
+				if ( ( empty( $table_rate->rate_min ) || $table_rate->rate_min <= $cart_total ) 
+						&& ( empty( $table_rate->rate_max ) || $table_rate->rate_max >= $cart_total ) ) {
+					$rate = array(
+						'id' => $this->id,
+						'label' => $table_rate_settings['title'] . ' (Autoship)',
+						'cost' => $table_rate->rate_cost,
+						'taxes' => ( $table_rate_settings['tax_status'] == 'taxable' ) ? '' : false,
+						'calc_tax' => 'per_order',
+					);
+					$this->add_rate( $rate );
+					break;
+				}
+			}
+			
 		}
+		
 	}
 	
 	/**
