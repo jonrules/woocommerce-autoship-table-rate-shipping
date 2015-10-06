@@ -36,4 +36,9 @@ if ( is_plugin_active( 'woocommerce-autoship/woocommerce-autoship.php' ) && is_p
 		return $methods;
 	}
 	add_filter( 'woocommerce_shipping_methods', 'wc_autoship_table_rate_shipping_add_methods', 10, 1 );
+	
+	function wc_autoship_table_rate_shipping_remove_method( $is_available ) {
+		return false;
+	}
+	add_filter( 'woocommerce_shipping_table_rate_is_available', 'wc_autoship_table_rate_shipping_remove_method', 10, 1 );
 }
