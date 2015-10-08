@@ -84,7 +84,7 @@ class WC_Autoship_Table_Rate_Shipping extends WC_Shipping_Method {
 						&& ( empty( $table_rate->rate_max ) || $table_rate->rate_max >= $cart_total ) ) {
 					$rate = array(
 						'id' => $this->id,
-						'label' => $table_rate_settings['title'] . ' (Autoship)',
+						'label' => $table_rate_settings['title'],
 						'cost' => $table_rate->rate_cost,
 						'taxes' => ( $table_rate_settings['tax_status'] == 'taxable' ) ? '' : false,
 						'calc_tax' => 'per_order',
